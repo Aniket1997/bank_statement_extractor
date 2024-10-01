@@ -1,54 +1,37 @@
-// generateContent.js
-const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const pdf = require('pdf-parse');
+const fs = require('fs');
 
-async function generateContent(req, res) {
+// This function processes the PDF and generates JSON content using Gemini
+async function processPDFandGenerateJSON(req, res) {
   try {
+    // Initialize Google Generative AI with your API key
     const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+    
+    // Read the PDF file from the file system
+    const dataBuffer = fs.readFileSync('file.pdf');
 
-    // Define a schema for the task list using the provided schema
-    const schema = {
-      description: "List of tasks for a to-do list",
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          taskDescription: {
-            type: SchemaType.STRING,
-            description: "A brief description of the task",
-            nullable: false,
-          },
-          dueDate: {
-            type: SchemaType.STRING,
-            description: "The due date for the task (optional)",
-            nullable: true, // Optional
-          },
-          completed: {
-            type: SchemaType.BOOLEAN,
-            description: "Indicates whether the task has been completed",
-            nullable: false, // Must be provided
-          },
-        },
-        required: ["taskDescription"], // taskDescription is mandatory
-      },
-    };
+    // Extract text from the PDF
+    const pdfData = await pdf(dataBuffer);
 
+    // Define the model configuration for generating content in JSON format
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-pro",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: schema,
       },
     });
 
-    // Change the prompt to ask for tasks for a to-do list project
-    const result = await model.generateContent("Create a list of tasks for overcome complex math");
-
-    // Parse the response and send it as JSON
+    // Send the PDF text to the Gemini model, requesting it to convert it to structured JSON
+    const result = await model.generateContent(`Convert the following PDF content into structured JSON data:\n${pdfData.text}`);
+    
+    // Parse the response text and send it as JSON
     res.json(JSON.parse(result.response.text()));
   } catch (error) {
+    // Error handling in case something goes wrong
     console.error("Error generating content:", error);
-    res.status(500).json({ error: "Failed to generate content." });
+    res.status(500).json({ error: "Failed to process the PDF and generate content." });
   }
 }
 
-module.exports = generateContent;
+module.exports = processPDFandGenerateJSON;
